@@ -1,5 +1,6 @@
 // Include Libraries
 #include <Arduino.h>
+#include <EEPROM.h>
 #include <SparkFun_TB6612.h>
 
 // Define Constants
@@ -14,7 +15,7 @@
 const int M1_OFFSET = 1;
 const int M2_OFFSET = 1;
 
-#define LED_1 8
+#define LED 13
 #define BUTTON_1 11
 #define BUTTON_2 12
 
@@ -31,29 +32,56 @@ void calibrate();
 // Setup
 void setup()
 {
+    Serial.begin(115200);
+    Serial.print("\nLoaded Threshold Values: ");
+
+    // Initialize Pins
     pinMode(BUTTON_1, INPUT_PULLUP);
     pinMode(BUTTON_2, INPUT_PULLUP);
+    pinMode(LED, OUTPUT);
 
-    pinMode(LED_1, OUTPUT);
+    // Load Threshold Values from EEPROM
+    for (int i = 0; i < 7; i++)
+    {
+        threshold[i] = EEPROM.read(i * 2) + (EEPROM.read(i * 2 + 1) << 8);
+        Serial.print(threshold[i]);
+        Serial.print("  ");
+    }
 
-    Serial.begin(115200);
-    Serial.println("Line Following Started");
-    while (digitalRead(BUTTON_1))
-        ;
-    calibrate();
+    // Blink LED
+    digitalWrite(LED, HIGH);
+    delay(500);
+    pinMode(LED, LOW);
+    Serial.println("\nLFR Initialized\n");
 }
 
-// MainLoop
+// Main Loop
 void loop()
 {
+    if (digitalRead(BUTTON_2) == LOW)
+        calibrate();
+
+    for (int i = 0; i < 7; i++)
+    {
+        Serial.print(i + 1);
+        Serial.print(": ");
+        Serial.print(analogRead(ir[i]) > threshold[i] ? "Black      " : "White      ");
+    }
+    Serial.println();
 }
 
 // Function Definitions
 void calibrate()
 {
-    int min[7] = {1023, 1023, 1023, 1023, 1023, 1023, 1023};
-    int max[7] = {0, 0, 0, 0, 0, 0, 0};
-    for (int i = 0; i < 1500; i++)
+    int min[7] = {1023, 1023, 1023, 1023, 1023, 1023, 1023}, max[7] = {0, 0, 0, 0, 0, 0, 0};
+
+    // Start Calibration Sequence after 1 second
+    Serial.println("Calibration Sequence Starting");
+    digitalWrite(LED, HIGH);
+    delay(1000);
+
+    // Clockwise Rotation
+    for (int i = 0; i < 750; i++)
     {
         for (int j = 0; j < 7; j++)
         {
@@ -67,12 +95,24 @@ void calibrate()
                 max[j] = val;
             }
         }
-        motor1.drive(50);
-        motor2.drive(-50);
+        motor1.drive(25);
+        motor2.drive(-25);
+        delay(1);
     }
+
+    // Stop Motors and blink LED
     motor1.brake();
     motor2.brake();
-    for (int i = 0; i < 1500; i++)
+    for (int i = 0; i < 4; i++)
+    {
+        digitalWrite(LED, HIGH);
+        delay(100);
+        digitalWrite(LED, LOW);
+        delay(100);
+    }
+
+    // Anti-Clockwise Rotation
+    for (int i = 0; i < 750; i++)
     {
         for (int j = 0; j < 7; j++)
         {
@@ -86,14 +126,29 @@ void calibrate()
                 max[j] = val;
             }
         }
-        motor1.drive(-50);
-        motor2.drive(50);
+        motor1.drive(-25);
+        motor2.drive(25);
+        delay(1);
     }
+
+    // Stop Motors and blink LED
     motor1.brake();
     motor2.brake();
+    for (int i = 0; i < 4; i++)
+    {
+        digitalWrite(LED, HIGH);
+        delay(100);
+        digitalWrite(LED, LOW);
+        delay(100);
+    }
+
+    // Save Threshold Values
+    Serial.print("Threshold Values: ");
     for (int i = 0; i < 7; i++)
     {
         threshold[i] = (min[i] + max[i]) / 2;
+        EEPROM.write(i * 2, threshold[i] & 0xFF);
+        EEPROM.write(i * 2 + 1, (threshold[i] >> 8) & 0xFF);
         Serial.print(threshold[i]);
         Serial.print("  ");
     }
