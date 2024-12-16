@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <EEPROM.h>
 #include <SparkFun_TB6612.h>
+#include <PID_v1.h>
 
 // Define Constants
 #define M1_IN1 4
@@ -19,15 +20,24 @@ const int M2_OFFSET = 1;
 #define BUTTON_1 11
 #define BUTTON_2 12
 
+// Initialize Variables
+double Kp = 0.1, Kd = 0.4, Ki = 0;
+double Setpoint, Input, Output, rpm;
+
+int speed = 40;
+int turnspeed = 30;
+
 // Global Variables
 Motor motor1 = Motor(M1_IN1, M1_IN2, M1_PWM, M1_OFFSET, STBY);
 Motor motor2 = Motor(M2_IN1, M2_IN2, M2_PWM, M2_OFFSET, STBY);
+PID pid(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
 int ir[7] = {A0, A1, A2, A3, A4, A5, A6};
 int threshold[7];
 
 // Function Prototypes
 void calibrate();
+void dryrun();
 
 // Setup
 void setup()
@@ -38,7 +48,15 @@ void setup()
     // Initialize Pins
     pinMode(BUTTON_1, INPUT_PULLUP);
     pinMode(BUTTON_2, INPUT_PULLUP);
+    pinMode(2, OUTPUT);
+    pinMode(3, OUTPUT);
+    digitalWrite(2, HIGH);
+    digitalWrite(3, HIGH);
     pinMode(LED, OUTPUT);
+
+    // PID Controller Setup
+    pid.SetMode(AUTOMATIC);
+    pid.SetOutputLimits(-speed / 2, speed / 2);
 
     // Load Threshold Values from EEPROM
     for (int i = 0; i < 7; i++)
@@ -58,30 +76,27 @@ void setup()
 // Main Loop
 void loop()
 {
-    if (digitalRead(BUTTON_2) == LOW)
-        calibrate();
-
-    for (int i = 0; i < 7; i++)
+    if (digitalRead(BUTTON_1) == LOW)
     {
-        Serial.print(i + 1);
-        Serial.print(": ");
-        Serial.print(analogRead(ir[i]) > threshold[i] ? "Black      " : "White      ");
+        delay(1000);
+        dryrun();
     }
-    Serial.println();
+    if (digitalRead(BUTTON_2) == LOW)
+    {
+        delay(1000);
+        calibrate();
+    }
 }
 
 // Function Definitions
 void calibrate()
 {
     int min[7] = {1023, 1023, 1023, 1023, 1023, 1023, 1023}, max[7] = {0, 0, 0, 0, 0, 0, 0};
-
-    // Start Calibration Sequence after 1 second
     Serial.println("Calibration Sequence Starting");
     digitalWrite(LED, HIGH);
-    delay(1000);
 
     // Clockwise Rotation
-    for (int i = 0; i < 750; i++)
+    for (int i = 0; i < 1000; i++)
     {
         for (int j = 0; j < 7; j++)
         {
@@ -95,8 +110,8 @@ void calibrate()
                 max[j] = val;
             }
         }
-        motor1.drive(25);
-        motor2.drive(-25);
+        motor1.drive(speed / 2);
+        motor2.drive(-speed / 2);
         delay(1);
     }
 
@@ -112,7 +127,7 @@ void calibrate()
     }
 
     // Anti-Clockwise Rotation
-    for (int i = 0; i < 750; i++)
+    for (int i = 0; i < 1000; i++)
     {
         for (int j = 0; j < 7; j++)
         {
@@ -126,8 +141,8 @@ void calibrate()
                 max[j] = val;
             }
         }
-        motor1.drive(-25);
-        motor2.drive(25);
+        motor1.drive(-speed / 2);
+        motor2.drive(speed / 2);
         delay(1);
     }
 
@@ -153,4 +168,37 @@ void calibrate()
         Serial.print("  ");
     }
     Serial.println();
+}
+
+void dryrun()
+{
+    Serial.println("Dry Run Mode");
+    digitalWrite(LED, LOW);
+    bool endFlag = false;
+    while (!endFlag)
+    {
+        // Print Sensor Values
+        for (int i = 0; i < 7; i++)
+        {
+            Serial.print(analogRead(ir[i]));
+            Serial.print("  ");
+        }
+        Serial.println();
+        while (1)
+        {
+            Input = analogRead(ir[2]) - analogRead(ir[4]);
+            Serial.print("Input: ");
+            Serial.print(Input);
+            pid.Compute();
+            Serial.print("    Output: ");
+            Serial.println(Output);
+            motor1.drive(speed + Output);
+            motor2.drive(speed - Output);
+        }
+        endFlag = true;
+    }
+    digitalWrite(LED, HIGH);
+    motor1.brake();
+    motor2.brake();
+    Serial.println("Exiting Dry Run Mode");
 }
