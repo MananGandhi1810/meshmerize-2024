@@ -27,6 +27,8 @@ double Setpoint, Input, Output, rpm;
 int speed = 40;
 int turnspeed = 30;
 
+bool endFlag = false;
+
 // Global Variables
 Motor motor1 = Motor(M1_IN1, M1_IN2, M1_PWM, M1_OFFSET, STBY);
 Motor motor2 = Motor(M2_IN1, M2_IN2, M2_PWM, M2_OFFSET, STBY);
@@ -170,23 +172,26 @@ void calibrate()
     Serial.println();
 }
 
+void checknode()
+{
+    for (int i = 0; i < 7; i++)
+    {
+        if (analogRead(ir[i]) > threshold[i])
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
 void dryrun()
 {
     Serial.println("Dry Run Mode");
     digitalWrite(LED, LOW);
-    bool endFlag = false;
     while (!endFlag)
     {
-        // Print Sensor Values
-        for (int i = 0; i < 7; i++)
-        {
-            Serial.print(analogRead(ir[i]));
-            Serial.print("  ");
-        }
-        Serial.println();
-        while (1)
-        {
-            Input = analogRead(ir[2]) - analogRead(ir[4]);
+        switch (checknode()) {
+            Input = (threshold[2] - analogRead(ir[2])) - (threshold[4] - analogRead(ir[4]));
             Serial.print("Input: ");
             Serial.print(Input);
             pid.Compute();
