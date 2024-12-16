@@ -27,17 +27,49 @@ double Setpoint, Input, Output, rpm;
 int speed = 80;
 int turnspeed = 30;
 
+String path = "";
+bool endFlag = false;
+
 // Global Variables
 Motor motor1 = Motor(M1_IN1, M1_IN2, M1_PWM, M1_OFFSET, STBY);
 Motor motor2 = Motor(M2_IN1, M2_IN2, M2_PWM, M2_OFFSET, STBY);
 PID pid(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
-int ir[7] = {A0, A1, A2, A3, A4, A5, A6};
+int ir[7] = {A7, A1, A2, A3, A4, A5, A6};
 int threshold[7];
 
 // Function Prototypes
 void calibrate();
 void dryrun();
+char checknode();
+
+void straight()
+{
+    Input = (threshold[2] - analogRead(ir[2])) - (threshold[4] - analogRead(ir[4]));
+    pid.Compute();
+    motor1.drive(speed + Output);
+    motor2.drive(speed - Output);
+}
+
+void left()
+{
+    int startTime = millis();
+    while (checknode() != 'S' || millis() - startTime < 1000)
+    {
+        motor2.drive(turnspeed);
+        motor1.brake();
+    }
+}
+
+void right()
+{
+    int startTime = millis();
+    while (checknode() != 'S' || millis() - startTime < 1000)
+    {
+        motor2.brake();
+        motor1.drive(turnspeed);
+    }
+}
 
 // Setup
 void setup()
@@ -95,29 +127,7 @@ void calibrate()
     Serial.println("Calibration Sequence Starting");
     digitalWrite(LED, HIGH);
 
-    // Clockwise Rotation
-    for (int i = 0; i < 1500; i++)
-    {
-        for (int j = 0; j < 7; j++)
-        {
-            int val = analogRead(ir[j]);
-            if (val < min[j])
-            {
-                min[j] = val;
-            }
-            if (val > max[j])
-            {
-                max[j] = val;
-            }
-        }
-        motor1.drive(speed / 2);
-        motor2.drive(-speed / 2);
-        delay(1);
-    }
-
-    // Stop Motors and blink LED
-    motor1.brake();
-    motor2.brake();
+    // Blink LED
     for (int i = 0; i < 4; i++)
     {
         digitalWrite(LED, HIGH);
@@ -126,8 +136,8 @@ void calibrate()
         delay(100);
     }
 
-    // Anti-Clockwise Rotation
-    for (int i = 0; i < 1500; i++)
+    // Scan
+    for (int i = 0; i < 1000; i++)
     {
         for (int j = 0; j < 7; j++)
         {
@@ -141,14 +151,10 @@ void calibrate()
                 max[j] = val;
             }
         }
-        motor1.drive(-speed / 2);
-        motor2.drive(speed / 2);
-        delay(1);
+        delay(10);
     }
 
-    // Stop Motors and blink LED
-    motor1.brake();
-    motor2.brake();
+    // Blink LED
     for (int i = 0; i < 4; i++)
     {
         digitalWrite(LED, HIGH);
@@ -168,34 +174,98 @@ void calibrate()
         Serial.print("  ");
     }
     Serial.println();
+    // Print max and min
+    Serial.println("Max Values: ");
+    for (int i = 0; i < 7; i++)
+    {
+        Serial.print(max[i]);
+        Serial.print("  ");
+    }
+    Serial.println();
+    Serial.println("Min Values: ");
+    for (int i = 0; i < 7; i++)
+    {
+        Serial.print(min[i]);
+        Serial.print("  ");
+    }
+}
+
+char checknode()
+{
+    if ((analogRead(ir[0]) > threshold[0]) && (analogRead(ir[6]) > threshold[6]) && (analogRead(ir[3]) > threshold[3]) && (analogRead(ir[2]) > threshold[2]) && (analogRead(ir[4]) > threshold[4]) && (analogRead(ir[1]) > threshold[1]) && (analogRead(ir[5]) > threshold[5]))
+    {
+        return 'N';
+    }
+    if (((analogRead(ir[0]) > threshold[0]) && (analogRead(ir[6]) > threshold[6])) && (analogRead(ir[3]) < threshold[3]))
+    {
+        path += 'S';
+        return 'S';
+    }
+    if ((analogRead(ir[0]) < threshold[0]) && (analogRead(ir[6]) < threshold[6]))
+    {
+        path += 'J';
+        return 'J';
+    }
+    if (analogRead(ir[6]) < threshold[6])
+    {
+        path += 'R';
+        return 'R';
+    }
+    else if (analogRead(ir[0]) < threshold[0])
+    {
+        path += 'L';
+        return 'L';
+    }
+    else
+    {
+        return 'S';
+    }
+    delay(1000);
 }
 
 void dryrun()
 {
     Serial.println("Dry Run Mode");
     digitalWrite(LED, LOW);
-    bool endFlag = false;
+    endFlag = false;
     while (!endFlag)
     {
-        // Print Sensor Values
         for (int i = 0; i < 7; i++)
         {
-            Serial.print(analogRead(ir[i]));
-            Serial.print("  ");
+            if (analogRead(ir[i]) < threshold[i])
+            {
+                Serial.print("Line      ");
+            }
+            else
+            {
+                Serial.print("No Line       ");
+            }
         }
-        Serial.println();
-        while (1)
+        char node = checknode();
+        Serial.println(node);
+        // PID
+        switch (node)
         {
-            Input = (threshold[2] - analogRead(ir[2])) - (threshold[4] - analogRead(ir[4]));
-            Serial.print("Input: ");
-            Serial.print(Input);
-            pid.Compute();
-            Serial.print("    Output: ");
-            Serial.println(Output);
-            motor1.drive(speed + Output);
-            motor2.drive(speed - Output);
+        case 'S':
+            straight();
+            break;
+
+        case 'L':
+            left();
+            break;
+
+        case 'R':
+            right();
+            break;
+
+        case 'J':
+            endFlag = true;
+            break;
+
+        default:
+            endFlag = true;
+            break;
         }
-        endFlag = true;
     }
     digitalWrite(LED, HIGH);
     motor1.brake();

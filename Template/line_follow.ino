@@ -27,8 +27,8 @@ void PID()
   }
   Serial.println();
 
-  lsp = constrain(lsp, 0, 200);
-  rsp = constrain(rsp, 0, 200);
+  lsp = constrain(lsp, 0, 50);
+  rsp = constrain(rsp, 0, 50);
 
   motor1.drive(rsp);
   motor2.drive(lsp);

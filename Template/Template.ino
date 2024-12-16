@@ -20,16 +20,16 @@ bool endFound = 0;
 // int threshold = (blackValue + whiteValue) * 0.5;
 
 
-int FT = 80;// how much the bot moves forward before turning
+int FT = 50;// how much the bot moves forward before turning
 
 int P, D, I, previousError, PIDvalue, error;
-int lsp = 100;
-int rsp = 100;
+int lsp = 50;
+int rsp = 50;
 
 
-int lfspeed = 40;// change this for bot average speed
+int lfspeed = 30;// change this for bot average speed
 
-int turnspeed = 30;
+int turnspeed = 20;
 float Kp = 0.1;
 float Kd = 0.4;
 float Ki = 0;
