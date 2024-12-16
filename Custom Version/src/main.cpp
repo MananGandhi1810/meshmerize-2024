@@ -24,10 +24,8 @@ const int M2_OFFSET = 1;
 double Kp = 0.1, Kd = 0.4, Ki = 0;
 double Setpoint, Input, Output, rpm;
 
-int speed = 40;
+int speed = 80;
 int turnspeed = 30;
-
-bool endFlag = false;
 
 // Global Variables
 Motor motor1 = Motor(M1_IN1, M1_IN2, M1_PWM, M1_OFFSET, STBY);
@@ -58,7 +56,7 @@ void setup()
 
     // PID Controller Setup
     pid.SetMode(AUTOMATIC);
-    pid.SetOutputLimits(-speed / 2, speed / 2);
+    pid.SetOutputLimits(-speed / 4, speed / 4);
 
     // Load Threshold Values from EEPROM
     for (int i = 0; i < 7; i++)
@@ -98,7 +96,7 @@ void calibrate()
     digitalWrite(LED, HIGH);
 
     // Clockwise Rotation
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 1500; i++)
     {
         for (int j = 0; j < 7; j++)
         {
@@ -129,7 +127,7 @@ void calibrate()
     }
 
     // Anti-Clockwise Rotation
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 1500; i++)
     {
         for (int j = 0; j < 7; j++)
         {
@@ -172,25 +170,22 @@ void calibrate()
     Serial.println();
 }
 
-void checknode()
-{
-    for (int i = 0; i < 7; i++)
-    {
-        if (analogRead(ir[i]) > threshold[i])
-        {
-            return i;
-        }
-    }
-    return -1;
-}
-
 void dryrun()
 {
     Serial.println("Dry Run Mode");
     digitalWrite(LED, LOW);
+    bool endFlag = false;
     while (!endFlag)
     {
-        switch (checknode()) {
+        // Print Sensor Values
+        for (int i = 0; i < 7; i++)
+        {
+            Serial.print(analogRead(ir[i]));
+            Serial.print("  ");
+        }
+        Serial.println();
+        while (1)
+        {
             Input = (threshold[2] - analogRead(ir[2])) - (threshold[4] - analogRead(ir[4]));
             Serial.print("Input: ");
             Serial.print(Input);
